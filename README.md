@@ -30,6 +30,7 @@ Deploy this project to the cloud in minutes! Click one of the buttons below:
 - 📖 **Full Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
 - ⚡ **Quick Commands**: [QUICK-DEPLOY.md](QUICK-DEPLOY.md)
 - 📊 **Platform Comparison**: [PLATFORM-COMPARISON.md](PLATFORM-COMPARISON.md)
+- 🔒 **Security Guide**: [SECURITY.md](SECURITY.md)
 - 🤝 **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📂 Files
@@ -61,15 +62,16 @@ Then open `http://localhost:8000` in your browser.
 
 ## 🔑 Mapbox Token
 
-This project uses Mapbox GL JS. The included token is for demonstration purposes.
+⚠️ **IMPORTANT**: The Mapbox token in this repository is a placeholder.
 
 **For production use:**
 1. Create a free account at [mapbox.com](https://mapbox.com)
-2. Generate your own access token
+2. Generate your own access token with URL restrictions
 3. Replace the token in `index.html` and `advanced.html`:
    ```javascript
    mapboxgl.accessToken = "YOUR_MAPBOX_TOKEN_HERE";
    ```
+4. See [SECURITY.md](SECURITY.md) for complete security best practices
 
 ## 🛠️ Technology Stack
 

@@ -195,6 +195,35 @@ Then open `http://localhost:8000` in your browser.
 
 ---
 
+## ⚠️ Security Configuration (CRITICAL)
+
+**Before deploying to production, you MUST replace the Mapbox token!**
+
+### Steps to Secure Your Deployment:
+
+1. **Get Your Own Token**
+   - Create a free account at [mapbox.com](https://mapbox.com)
+   - Go to your [Account Dashboard](https://account.mapbox.com/access-tokens/)
+   - Click "Create a token"
+
+2. **Configure Token Restrictions**
+   - Add URL restrictions to your token
+   - Example: `https://your-site.vercel.app/*`
+   - This prevents unauthorized usage
+
+3. **Update Your Files**
+   - Replace `YOUR_MAPBOX_TOKEN_HERE` in `index.html`
+   - Replace `YOUR_MAPBOX_TOKEN_HERE` in `advanced.html`
+
+4. **Monitor Usage**
+   - Check your Mapbox dashboard regularly
+   - Set up usage alerts
+   - Rotate tokens periodically
+
+📖 **Full Security Guide**: See [SECURITY.md](SECURITY.md) for complete security best practices.
+
+---
+
 ## Important Notes
 
 ### Mapbox Token
