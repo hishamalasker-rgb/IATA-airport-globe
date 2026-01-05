@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "name": "iata-airport-globe",
+  "builds": [
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
+}
