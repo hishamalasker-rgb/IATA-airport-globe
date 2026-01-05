@@ -1,0 +1,324 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>3D Airport Globe (Codes Only)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body { margin:0; padding:0; }
+    #map { position:absolute; top:0; bottom:0; width:100%; }
+
+    .panel{
+      position:absolute; top:12px; left:12px; z-index:10;
+      background:#fff; border-radius:12px; padding:10px 12px;
+      box-shadow:0 2px 12px rgba(0,0,0,.18);
+      font: 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      width: 320px;
+    }
+    .row{ display:flex; gap:8px; align-items:center; margin-top:8px; }
+    input{
+      width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:10px;
+      outline:none;
+    }
+    button{
+      padding:8px 10px; border:1px solid #ddd; border-radius:10px; background:#f7f7f7;
+      cursor:pointer;
+    }
+    button:hover{ filter:brightness(0.98); }
+    select{
+      width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:10px; background:#fff;
+    }
+    .hint{ color:#444; margin-top:8px; }
+    .small{ color:#666; font-size:12px; margin-top:6px; }
+    .ok{ color:#0a7; }
+    .bad{ color:#c33; }
+    .divider{ height:1px; background:#eee; margin:10px 0; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="panel">
+    <div><b>3D Airport Globe • Codes Only</b></div>
+    <div class="small">Search IATA (3) or ICAO (4). Example: <b>DXB</b>, <b>OMDB</b></div>
+
+    <div class="row">
+      <input id="codeInput" placeholder="Type airport code… (e.g., JFK / KJFK)" maxlength="8" />
+      <button id="goBtn">Go</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="row">
+      <select id="styleSelect" title="Map style">
+        <option value="mapbox://styles/mapbox/standard">Light (Standard)</option>
+        <option value="mapbox://styles/mapbox/standard-dark">Dark</option>
+        <option value="mapbox://styles/mapbox/satellite-streets-v12">Satellite</option>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="hint">
+      • Zoom out = clusters<br/>
+      • Zoom in = code labels<br/>
+      • Click a dot/label to center
+    </div>
+
+    <div id="status" class="small"></div>
+  </div>
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  <script>
+    mapboxgl.accessToken = "pk.eyJ1IjoiaGlzaGFtYWxhc2tlciIsImEiOiJjbWswdDM1N2E0bDgzM2NzZWp5ajNtMGlsIn0.C4Veyys_2wu7q0b2TP6B7Q";
+
+    const AIRPORTS_CSV = "https://ourairports.com/airports.csv";
+    const allowedTypes = new Set(["large_airport", "medium_airport", "small_airport"]);
+
+    const state = {
+      geojson: null,
+      codeIndex: new Map(),  // code -> {lon,lat}
+      styleUrl: "mapbox://styles/mapbox/standard"
+    };
+
+    const el = (id) => document.getElementById(id);
+    const statusEl = el("status");
+
+    function setStatus(msg, kind="") {
+      statusEl.className = "small " + (kind || "");
+      statusEl.textContent = msg;
+    }
+
+    // CSV parser (handles quotes and commas)
+    function parseCSV(text) {
+      const rows = [];
+      let i = 0, field = "", row = [], inQuotes = false;
+      while (i < text.length) {
+        const c = text[i];
+        if (c === '"') {
+          if (inQuotes && text[i+1] === '"') { field += '"'; i += 2; continue; }
+          inQuotes = !inQuotes; i++; continue;
+        }
+        if (!inQuotes && (c === "," || c === "\n" || c === "\r")) {
+          row.push(field); field = "";
+          if (c === ",") { i++; continue; }
+          if (c === "\r" && text[i+1] === "\n") i++;
+          if (row.length > 1) rows.push(row);
+          row = [];
+          i++; continue;
+        }
+        field += c; i++;
+      }
+      if (field.length || row.length) { row.push(field); rows.push(row); }
+      return rows;
+    }
+
+    async function loadAirportsCodesOnly() {
+      setStatus("Loading airport data…");
+      const res = await fetch(AIRPORTS_CSV);
+      const csv = await res.text();
+      const rows = parseCSV(csv);
+      const header = rows[0];
+      const idx = Object.fromEntries(header.map((h, n) => [h, n]));
+
+      const features = [];
+      const codeIndex = new Map();
+
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const type = row[idx["type"]];
+        if (!allowedTypes.has(type)) continue;
+
+        const lat = parseFloat(row[idx["latitude_deg"]]);
+        const lon = parseFloat(row[idx["longitude_deg"]]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+        const iata = (row[idx["iata_code"]] || "").trim().toUpperCase();
+        const icao = (row[idx["icao_code"]] || "").trim().toUpperCase();
+
+        // Strict: only IATA/ICAO (no ident fallback)
+        const label = iata || icao;
+        if (!label) continue;
+
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [lon, lat] },
+          properties: { label }
+        });
+
+        // Index both codes if present
+        if (iata) codeIndex.set(iata, { lon, lat });
+        if (icao) codeIndex.set(icao, { lon, lat });
+      }
+
+      setStatus(`Loaded ${features.length.toLocaleString()} airports.`, "ok");
+      return {
+        geojson: { type: "FeatureCollection", features },
+        codeIndex
+      };
+    }
+
+    function addFog(map) {
+      try {
+        map.setFog({
+          range: [0.5, 10],
+          color: "white",
+          "high-color": "#add8ff",
+          "space-color": "#00111a",
+          "horizon-blend": 0.12
+        });
+      } catch {}
+    }
+
+    function buildMap(styleUrl) {
+      const map = new mapboxgl.Map({
+        container: "map",
+        style: styleUrl,
+        center: [0, 20],
+        zoom: 1.2,
+        projection: "globe"
+      });
+
+      map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+
+      map.on("style.load", () => addFog(map));
+
+      map.on("load", () => {
+        map.addSource("airports", {
+          type: "geojson",
+          data: state.geojson,
+          cluster: true,
+          clusterRadius: 40,
+          clusterMaxZoom: 6
+        });
+
+        map.addLayer({
+          id: "clusters",
+          type: "circle",
+          source: "airports",
+          filter: ["has", "point_count"],
+          paint: { "circle-radius": ["step", ["get", "point_count"], 12, 50, 16, 200, 22], "circle-opacity": 0.75 }
+        });
+
+        map.addLayer({
+          id: "cluster-count",
+          type: "symbol",
+          source: "airports",
+          filter: ["has", "point_count"],
+          layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 12 }
+        });
+
+        map.addLayer({
+          id: "points",
+          type: "circle",
+          source: "airports",
+          filter: ["!", ["has", "point_count"]],
+          paint: { "circle-radius": 4, "circle-opacity": 0.9 }
+        });
+
+        map.addLayer({
+          id: "labels",
+          type: "symbol",
+          source: "airports",
+          filter: ["!", ["has", "point_count"]],
+          minzoom: 6,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": 12,
+            "text-offset": [0, 1],
+            "text-anchor": "top",
+            "text-allow-overlap": false
+          }
+        });
+
+        // Click cluster -> zoom in
+        map.on("click", "clusters", (e) => {
+          const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+          const clusterId = features[0].properties.cluster_id;
+          const source = map.getSource("airports");
+          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({ center: features[0].geometry.coordinates, zoom });
+          });
+        });
+
+        // Click point or label -> center + zoom
+        function flyToFeature(e) {
+          const f = e.features && e.features[0];
+          if (!f) return;
+          const [lon, lat] = f.geometry.coordinates;
+          map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 8) });
+          setStatus(`Centered: ${f.properties.label}`, "ok");
+        }
+        map.on("click", "points", flyToFeature);
+        map.on("click", "labels", flyToFeature);
+
+        map.on("mouseenter", "clusters", () => map.getCanvas().style.cursor = "pointer");
+        map.on("mouseleave", "clusters", () => map.getCanvas().style.cursor = "");
+        map.on("mouseenter", "points", () => map.getCanvas().style.cursor = "pointer");
+        map.on("mouseleave", "points", () => map.getCanvas().style.cursor = "");
+        map.on("mouseenter", "labels", () => map.getCanvas().style.cursor = "pointer");
+        map.on("mouseleave", "labels", () => map.getCanvas().style.cursor = "");
+      });
+
+      return map;
+    }
+
+    function normalizeCode(s) {
+      return (s || "").trim().toUpperCase().replace(/\s+/g, "");
+    }
+
+    function wireUI(mapRef) {
+      const input = el("codeInput");
+      const goBtn = el("goBtn");
+      const clearBtn = el("clearBtn");
+      const styleSelect = el("styleSelect");
+
+      function go() {
+        const code = normalizeCode(input.value);
+        if (!code) { setStatus("Type a code first.", "bad"); return; }
+        const hit = state.codeIndex.get(code);
+        if (!hit) { setStatus(`Not found: ${code}`, "bad"); return; }
+        mapRef.easeTo({ center: [hit.lon, hit.lat], zoom: 9 });
+        setStatus(`Found: ${code}`, "ok");
+      }
+
+      goBtn.addEventListener("click", go);
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+
+      clearBtn.addEventListener("click", () => {
+        input.value = "";
+        setStatus("");
+      });
+
+      styleSelect.addEventListener("change", () => {
+        const newStyle = styleSelect.value;
+        state.styleUrl = newStyle;
+
+        // Rebuild map to switch style cleanly (keeps data in state.geojson)
+        const center = mapRef.getCenter();
+        const zoom = mapRef.getZoom();
+        mapRef.remove();
+
+        const newMap = buildMap(newStyle);
+        newMap.once("load", () => {
+          newMap.jumpTo({ center, zoom });
+        });
+
+        // Re-wire UI to the new map reference
+        wireUI(newMap);
+      });
+    }
+
+    // Boot
+    (async () => {
+      const { geojson, codeIndex } = await loadAirportsCodesOnly();
+      state.geojson = geojson;
+      state.codeIndex = codeIndex;
+
+      const map = buildMap(state.styleUrl);
+      wireUI(map);
+    })();
+  </script>
+</body>
+</html>
