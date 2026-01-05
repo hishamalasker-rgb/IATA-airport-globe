@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>3D Airport Globe</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body { margin:0; padding:0; }
+    #map { position:absolute; top:0; bottom:0; width:100%; }
+    .info {
+      position:absolute;
+      top:12px; left:12px;
+      background:#fff;
+      padding:10px 12px;
+      border-radius:10px;
+      font:13px system-ui,sans-serif;
+      box-shadow:0 2px 10px rgba(0,0,0,.15);
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="info">3D Globe • Airports + Codes</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken = "YOUR_MAPBOX_TOKEN_HERE";
+
+const map = new mapboxgl.Map({
+  container: "map",
+  style: "mapbox://styles/mapbox/standard",
+  center: [0, 20],
+  zoom: 1.2,
+  projection: "globe"
+});
+
+map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+
+map.on("style.load", () => {
+  map.setFog({
+    range: [0.5, 10],
+    color: "white",
+    "high-color": "#add8ff",
+    "space-color": "#00111a",
+    "horizon-blend": 0.12
+  });
+});
+
+const AIRPORTS_CSV = "https://ourairports.com/airports.csv";
+const allowedTypes = new Set(["large_airport", "medium_airport", "small_airport"]);
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQuotes && text[i+1] === '"') { field += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (!inQuotes && (c === "," || c === "\n")) {
+      row.push(field); field = "";
+      if (c === "\n") { rows.push(row); row = []; }
+    } else field += c;
+  }
+  row.push(field); rows.push(row);
+  return rows;
+}
+
+async function loadAirports() {
+  const res = await fetch(AIRPORTS_CSV);
+  const csv = await res.text();
+  const rows = parseCSV(csv);
+  const header = rows[0];
+  const idx = Object.fromEntries(header.map((h, i) => [h, i]));
+  const features = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!allowedTypes.has(r[idx.type])) continue;
+
+    const lat = parseFloat(r[idx.latitude_deg]);
+    const lon = parseFloat(r[idx.longitude_deg]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+    const iata = (r[idx.iata_code] || "").trim();
+    const icao = (r[idx.icao_code] || "").trim();
+    const label = iata || icao;
+    if (!label) continue;
+
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: { label }
+    });
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+map.on("load", async () => {
+  const geojson = await loadAirports();
+
+  map.addSource("airports", {
+    type: "geojson",
+    data: geojson,
+    cluster: true,
+    clusterRadius: 40,
+    clusterMaxZoom: 6
+  });
+
+  map.addLayer({
+    id: "clusters",
+    type: "circle",
+    source: "airports",
+    filter: ["has", "point_count"],
+    paint: { "circle-radius": 14, "circle-opacity": 0.7 }
+  });
+
+  map.addLayer({
+    id: "cluster-count",
+    type: "symbol",
+    source: "airports",
+    filter: ["has", "point_count"],
+    layout: { "text-field": ["get", "point_count_abbreviated"] }
+  });
+
+  map.addLayer({
+    id: "points",
+    type: "circle",
+    source: "airports",
+    filter: ["!", ["has", "point_count"]],
+    paint: { "circle-radius": 4 }
+  });
+
+  map.addLayer({
+    id: "labels",
+    type: "symbol",
+    source: "airports",
+    filter: ["!", ["has", "point_count"]],
+    minzoom: 6,
+    layout: {
+      "text-field": ["get", "label"],
+      "text-size": 12,
+      "text-offset": [0, 1],
+      "text-anchor": "top"
+    }
+  });
+});
+</script>
+</body>
+</html>
