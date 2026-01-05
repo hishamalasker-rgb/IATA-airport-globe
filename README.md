@@ -26,7 +26,11 @@ Deploy this project to the cloud in minutes! Click one of the buttons below:
 - **Cloudflare Pages**: See [DEPLOYMENT.md](DEPLOYMENT.md#option-4-cloudflare-pages)
 - **AWS S3**: See [DEPLOYMENT.md](DEPLOYMENT.md#option-5-aws-s3--cloudfront)
 
-📖 **Full Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
+### 📚 Documentation
+- 📖 **Full Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
+- ⚡ **Quick Commands**: [QUICK-DEPLOY.md](QUICK-DEPLOY.md)
+- 📊 **Platform Comparison**: [PLATFORM-COMPARISON.md](PLATFORM-COMPARISON.md)
+- 🤝 **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📂 Files
 
